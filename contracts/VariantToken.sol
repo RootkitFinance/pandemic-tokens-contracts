@@ -6,36 +6,23 @@ import "./ERC20.sol";
 
 contract VariantToken is ERC20
 {
-    uint256 public spread;
+    uint256 public burnRate;
     address private constant devAddress;
+    IUniswapV3Factory public uniswapV3Factory;
+    WuhanLab public wuhanLab;
 
-    constructor(uint256 _tickSpace, uint256 _spread, uint256 _price, IERC20 _pairToken)
+    constructor(uint256 _tickSpace, uint256 _burnRate, uint256 _price, IERC20 _pairToken)
     {
-        spread = _spread;
-        // create uni v3 pool (tickSpace, this, pairToken)
+        burnRate = _burnRate;
+        uniswapV3Factory = IUniswapV3Factory(address("0x"));
+        wuhanLab = WuhanLab(address("0x"));
+        IUniswapV3PoolActions pool = IUniswapV3PoolActions(uniswapV3Factory.createPool(address(this), address(_pairToken), 200));
+        pool.initialize();
+        _mint(address(wuhanLab), 70**12 ether);
+        wuhanLab.addLiquidity(address(this), address(_pairToken), 0); //startingTick = sqr
         // _price is where to put our token in the pool
         // _spread is how may ticks below price to put the other side of liquidity 
         // add one side of liq with 100 ** 69  
-    }
-
-    function calculateExcessLiquidity() private view returns (uint256)
-    {
-        // circulatingSupply = total supply - UpOnly in pool - collected fees
-        // availableLiquidity = tokens in pool - collected fees
-        // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over
-        
-    }
-
-    function incrementLiquidity() public 
-    {
-        uint256 result = calculateExcessLiquidity();
-        if (result < 200) { return; }
-        
-        // remove upOnly liq
-        // Add back 1 tick higher
-        // remove token liq
-        // take dev cut
-        // put 1 tick higher
     }
 
     function spreadVirus() public 
