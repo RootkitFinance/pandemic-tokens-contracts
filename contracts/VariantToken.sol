@@ -6,33 +6,43 @@ import "./ERC20.sol";
 
 contract VariantToken is ERC20
 {
-    uint256 public burnRate;
-    address private constant devAddress;
-    IUniswapV3Factory public uniswapV3Factory;
-    WuhanLab public wuhanLab;
+    uint256 public constant burnRate;
+    IUniswapV3Factory public constant uniswapV3Factory;
+    WuhanLab public constant wuhanLab;
 
-    constructor(uint256 _tickSpace, uint256 _burnRate, uint256 _price, IERC20 _pairToken)
+    struct variantParams{
+        address pairToken;
+        uint128 startingTick;
+        address pool;
+    }
+
+    constructor()
     {
-        burnRate = _burnRate;
+        burnRate = 690;
         uniswapV3Factory = IUniswapV3Factory(address("0x"));
-        wuhanLab = WuhanLab(address("0x"));
-        IUniswapV3PoolActions pool = IUniswapV3PoolActions(uniswapV3Factory.createPool(address(this), address(_pairToken), 200));
-        pool.initialize();
+        wuhanLab = WuhanLab(address(msg.sender));
+        variantParams = wuhanLab.checkNewPoolParams();
+        IUniswapV3PoolActions pool = IUniswapV3PoolActions(uniswapV3Factory.createPool(address(this), variantParams[pairToken], 200));
+        pool.initialize(startingTick); 
+        variantParams[pool] = address(pool);
         _mint(address(wuhanLab), 70**12 ether);
-        wuhanLab.addLiquidity(address(this), address(_pairToken), 0); //startingTick = sqr
-        // _price is where to put our token in the pool
-        // _spread is how may ticks below price to put the other side of liquidity 
-        // add one side of liq with 100 ** 69  
     }
 
-    function spreadVirus() public 
+    function superSpreader()public
     {
-        //launch the clone with mutation
+        wuhanLab.incrementLiquidity(address(this));
     }
 
-    // no add liq
-    
-    // transfer  - sender or receiver must be a pool!!!!
+    function mutateNewVariant() public 
+    {
+        wuhanLab.eatAnExoticAnimal();
+    }
 
+    //move ERC20 functions diectly here, only import interface, only keep needed functions, similar to UniswapV2ERC20 
+    // transfer function requirements
+    // - only the factory is exempt from fees and all other restriictions 
+    // - sender or receiver must be the pool
+    // - burn on transfer
+    // - require extcode size == 0 .......... = no inline assembly .... we dont want contracts interacting with the tokens
 
 }
