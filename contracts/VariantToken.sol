@@ -6,9 +6,9 @@ import "./ERC20.sol";
 
 contract VariantToken is ERC20
 {
-    uint256 public constant burnRate;
-    IUniswapV3Factory public constant uniswapV3Factory;
-    WuhanLab public constant wuhanLab;
+    uint256 public constant burnRate = 690;
+    IUniswapV3Factory public immutable uniswapV3Factory;
+    WuhanLab public immutable wuhanLab;
 
     struct variantParams{
         address pairToken;
@@ -18,14 +18,13 @@ contract VariantToken is ERC20
 
     constructor()
     {
-        burnRate = 690;
         uniswapV3Factory = IUniswapV3Factory(address("0x"));
         wuhanLab = WuhanLab(address(msg.sender));
         variantParams = wuhanLab.checkNewPoolParams();
         IUniswapV3PoolActions pool = IUniswapV3PoolActions(uniswapV3Factory.createPool(address(this), variantParams[pairToken], 200));
         pool.initialize(startingTick); 
         variantParams[pool] = address(pool);
-        _mint(address(wuhanLab), 70**12 ether);
+        _mint(address(wuhanLab), 70e12 ether);
     }
 
     function superSpreader()public
@@ -35,7 +34,7 @@ contract VariantToken is ERC20
 
     function mutateNewVariant() public 
     {
-        wuhanLab.eatAnExoticAnimal();
+        wuhanLab.eatExoticAnimal();
     }
 
     //move ERC20 functions diectly here, only import interface, only keep needed functions, similar to UniswapV2ERC20 
