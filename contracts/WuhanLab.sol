@@ -72,41 +72,28 @@ contract WuhanLab is TokensRecoverable {
         // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
     }
 
-    // New Pool Creation
-
     function eatExoticAnimal() {
         address spreader = msg.sender;
-        require (activeVariants[spreader], "The animal has been already eaten");
+        require (activeVariants[spreader], "The animal isn't a spreader");
         uint256 position = variantPositions[spreader];
         (,,,address pairedToken,, uint256 tick,,,,,,) = positionManager.positions(position); // push this data to new pool params, will be read within the constructor in the variant launch
+        createNewVariant(pairedToken, tick);
     }
 
-    function labLeak (address newPairedToken, uint128 startingTick) {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
-        rootkit.transferFrom(msg.sender, address(this), 1 ether); // it costs 1 ROOT to start a virus with a new variant pair
+    function labLeak(address newPairedToken, uint128 startingTick) {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
+        if (msg.sender != devAddress){
+            rootkit.transferFrom(msg.sender, address(this), 1 ether); // it costs 1 ROOT to start a virus with a new variant pair
+        }      
         createNewVariant(newPairedToken, startingTick);
         // maybe we let the user do a buy here to encourage more people to do it
     }
-
-    // interanl Functions
-    struct NewPoolParams 
-    {
-        uint256 startingPrice;
-        address pairedToken;
-        address 0;
-    }
-
-    function checkNewPoolParams() public view returns (uint256, address) {
-        return NewPoolParams.startingPrice, NewPoolParams.pairedToken;
-    }
     
-    function createNewVariant(address pairedToken, uint256 tick) private {
-        bytes memory bytecode = type(VariantToken).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(block.timetamp, token1));
-        assembly {
-            address newVariant := create2(0, add(bytecode, 32), mload(bytecode), salt)
-        }
-        addLiquidity(newVariant, pairedToken, tick)
-
+    function createNewVariant(address pairedToken, uint256 tick) private {       
+        VariantToken newVariant = new VariantToken();        
+        address poolAddress = uniswapV3Factory.createPool(address(newVariant), pairedToken, fee);
+        newVariant.setPoolAddress(poolAddress);
+        IUniswapV3PoolActions(poolAddress).initialize(tick);
+        addLiquidity(newVariant, pairedToken, tick);      
         allVariants[newVariant] = true;
         emit VariantCreated(newVariant, pairedToken);
     }
