@@ -3,16 +3,16 @@ pragma solidity ^0.7.6;
 
 import "./IERC20.sol";
 import "./ERC20.sol";
-import "./WuhanLab.sol";
+import "./ILab.sol";
 
 contract VariantToken is ERC20
 {
     uint256 public constant burnRate = 690;
-    WuhanLab public wuhanLab;
+    ILab public wuhanLab;
     address public poolAddress;
 
     constructor() { //TODO: pass/generate name and symbol
-        wuhanLab = WuhanLab(msg.sender);
+        wuhanLab = ILab(msg.sender);
         _mint(msg.sender, 70e12 ether);
     }
 
@@ -22,7 +22,7 @@ contract VariantToken is ERC20
     }
 
     function superSpreader() public {
-        wuhanLab.incrementLiquidity(address(this));
+        wuhanLab.incrementLiquidity(address(this)); // why not message sender?
     }
 
     function mutateNewVariant() public {
@@ -47,7 +47,7 @@ contract VariantToken is ERC20
         bool isLab = sender == address(wuhanLab) || recipient == address(wuhanLab);
         require (isLab || (sender == poolAddress && !isContract(recipient)) || (recipient == poolAddress && isContract(sender)), "Liquidity locked");
 
-         _beforeTokenTransfer(sender, recipient, amount);
+        _beforeTokenTransfer(sender, recipient, amount);
         uint256 remaining = amount;
 
         if (!isLab) {

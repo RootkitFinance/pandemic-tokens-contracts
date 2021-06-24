@@ -8,8 +8,9 @@ import "./INonfungiblePositionManager.sol";
 import "./IUniswapV3Factory.sol";
 import "./IQuoter.sol";
 import "./VariantToken.sol";
+import "./ILab.sol";
 
-contract WuhanLab is TokensRecoverable {
+contract WuhanLab is ILab, TokensRecoverable {
     using SafeMath for uint256;
 
     mapping (address => uint256) variantPositions;
@@ -72,7 +73,7 @@ contract WuhanLab is TokensRecoverable {
         // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
     }
 
-    function eatExoticAnimal() {
+    function eatExoticAnimal() public {
         address spreader = msg.sender;
         require (activeVariants[spreader], "The animal isn't a spreader");
         uint256 position = variantPositions[spreader];
@@ -80,7 +81,7 @@ contract WuhanLab is TokensRecoverable {
         createNewVariant(pairedToken, tick);
     }
 
-    function labLeak(address newPairedToken, uint128 startingTick) {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
+    function labLeak(address newPairedToken, uint128 startingTick) public {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
         if (msg.sender != devAddress){
             rootkit.transferFrom(msg.sender, address(this), 1 ether); // it costs 1 ROOT to start a virus with a new variant pair
         }      
