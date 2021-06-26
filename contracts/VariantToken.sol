@@ -1,39 +1,44 @@
 // SPDX-License-Identifier: U-U-U-UPPPPP!!!
 pragma solidity ^0.7.6;
 
-import "./IERC20.sol";
+import "./SafeMath.sol";
 import "./ERC20.sol";
+import "./IERC20.sol";
 import "./ILab.sol";
 
-contract VariantToken is ERC20
-{
-    uint256 public constant burnRate = 690;
+contract VariantToken is ERC20 {   
+    using SafeMath for uint256;
+
     ILab public wuhanLab;
     address public poolAddress;
 
-    constructor() { //TODO: pass/generate name and symbol
+    uint256 public immutable burnRate;
+    uint256 public immutable incrementRate;
+    uint256 public immutable startPrice;
+    uint256 public immutable strainNonce;
+    uint256 public immutable variantNonce;
+
+    constructor(uint256 _strainNonce, uint256 _variantNonce) ERC20("Variant", "COVID") {
+        strainNonce = _strainNonce;
+        variantNonce = _variantNonce;
+        incrementRate = 200;
+        startPrice = 1 ether;
+        burnRate = 690;
         wuhanLab = ILab(msg.sender);
         _mint(msg.sender, 70e12 ether);
     }
 
-    function setPoolAddress(address _poolAddress) {
+    function setPoolAddress(address _poolAddress) public {
         require (msg.sender == address(wuhanLab), "Not Wuhan Lab");
         poolAddress = _poolAddress;
     }
 
     function superSpreader() public {
-        wuhanLab.incrementLiquidity(address(this)); // why not message sender?
+        wuhanLab.incrementLiquidity(address(this));
     }
 
     function mutateNewVariant() public {
         wuhanLab.eatExoticAnimal();
-    }
-
-    function isContract(address account) private view returns (bool) {
-        uint256 size;
-        // solhint-disable-next-line no-inline-assembly
-        assembly { size := extcodesize(account) }
-        return size > 0;
     }
 
     //move ERC20 functions diectly here, only import interface, only keep needed functions, similar to UniswapV2ERC20 
@@ -41,11 +46,10 @@ contract VariantToken is ERC20
     // - only the factory is exempt from fees and all other restriictions 
     // - sender or receiver must be the pool
     // - burn on transfer
-    // - require extcode size == 0 .......... = no inline assembly .... we dont want contracts interacting with the tokens
    
     function _transfer(address sender, address recipient, uint256 amount) internal virtual override {
         bool isLab = sender == address(wuhanLab) || recipient == address(wuhanLab);
-        require (isLab || (sender == poolAddress && !isContract(recipient)) || (recipient == poolAddress && isContract(sender)), "Liquidity locked");
+        require (isLab || sender == poolAddress || recipient == poolAddress, "Liquidity locked");
 
         _beforeTokenTransfer(sender, recipient, amount);
         uint256 remaining = amount;
