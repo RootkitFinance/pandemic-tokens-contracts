@@ -127,7 +127,7 @@ contract WuhanLab is ILab, TokensRecoverable {
     }
 
     function removeLiquidity(uint256 tokenId) private {      
-        (uint256 amount0, uint256 amount1) = positionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
+        positionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
             tokenId: tokenId,
             liquidity: type(uint128).max,
             amount0Min: 0,
