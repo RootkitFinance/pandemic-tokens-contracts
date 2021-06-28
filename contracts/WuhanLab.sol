@@ -6,6 +6,7 @@ import "./Uniswap/INonfungiblePositionManager.sol";
 import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IUniswapV3Factory.sol";
 import "./Uniswap/IQuoter.sol";
+import "./Uniswap/TickMath.sol";
 
 import "./IERC20.sol";
 import "./SafeMath.sol";
@@ -100,9 +101,8 @@ contract WuhanLab is ILab, TokensRecoverable {
     function createNewVariant(address pairedToken, int24 tick, uint256 strainNonce, uint256 variantNonce) private {       
         VariantToken newVariant = new VariantToken(strainNonce, variantNonce);
         address newVariantAddress = address(newVariant);
-        address poolAddress = uniswapV3Factory.createPool(newVariantAddress, pairedToken, fee);
-        newVariant.setPoolAddress(poolAddress);
-        //IUniswapV3PoolActions(poolAddress).initialize(tick);
+        address poolAddress = positionManager.createAndInitializePoolIfNecessary(newVariantAddress, pairedToken, fee, TickMath.getSqrtRatioAtTick(tick));
+        newVariant.setPoolAddress(poolAddress);       
         addLiquidity(newVariantAddress, pairedToken, tick);      
         activeVariants[address(newVariant)] = true;
         pairedVariants[pairedToken].push(newVariantAddress);
