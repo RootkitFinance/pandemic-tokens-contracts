@@ -24,7 +24,7 @@ contract WuhanLab is ILab, TokensRecoverable {
     
     INonfungiblePositionManager public immutable positionManager;
     IUniswapV3Factory public immutable uniswapV3Factory;
-    IQuoter public immutable quoter;    
+    IQuoter public immutable quoter; // remove quoter    
     IERC20 public immutable rootkit;
     address private immutable devAddress;
     uint256 public strainCount;
@@ -41,15 +41,58 @@ contract WuhanLab is ILab, TokensRecoverable {
         devAddress = msg.sender;
     }
 
-    function incrementLiquidity(address variantToken) public override { // raise the price of a variant token by 4%    
+    /*mapping (uint256 => strainData) public fullDataSet;
+    mapping (address => variantData) public fullVariantDetails;
+
+    struct strainData {
+        address pairedToken;
+        address[] allVariants;
+    }
+
+    struct variantData {
+        uint256 positionID; // updated every liquidity increment
+        int24 currentTickLower; // updated every liquidity increment
+        address pairedToken; // constructor / inherited from parent virus
+        address poolAddress; // constructor
+        bool isToken0; // constructor / token 1 and 0 sorted by numeric order ... 0x0, 0x1,0x2, ect ect
+        //uint160 startSqrtPriceX96; // we dont really need this, its always best to calculate from the closest tick
+        int24 startTickLower; // this can be a randomization factor, just ensure the result is divisible by 200
+        uint256 incrementRate; // new strains are all set at 400 - random(4) at variant creation -400, -200, -0, +200, result must be below burn, or -200.... 400 is the minimum
+        uint256 burnRate; // all tokens set to 690 at start, random(369), 1 = -246, 369 = +123 ... minimum burn amount possible is 420
+    }
+
+        // was to be called during increment
+    function updateLiquidityParams(address variant) private returns (int24 newTick, int24 tickUpper, uint160 newPrice){ // most token data and variables tracked here, 
+        int24 nextTick = variantData.currentTickLower + variantData.incrementRate;
+        variantData.currentTickLower + variantData.incrementRate;
+        variantData.CurrentSqrtPriceX96 = TickMath.getSqrtRatioAtTick(nextTick);
+    }
+
+    function incrementReady(address variantToken) private view returns(bool){ }
+
+    function calculateExcessLiquidity(address variantToken, address pairedToken) private returns (uint256) { // still studying this, lots to fix
+        address pool = uniswapV3Factory.getPool(variantToken, pairedToken, fee);
+        uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(pool));
+        uint256 quote = quoter.quoteExactInput(abi.encodePacked(variantToken, pairedToken, fee), circulatingSupply);
+        uint256 pairedInPool = paired.balanceOf(pool);
+        uint256 excessLiquidity = pairedInPool.sub(quote);
+        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);
+        // circulatingSupply = total supply - UpOnly in pool - collected fees
+        // availableLiquidity = tokens in pool
+        // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
+    } */
+
+    function incrementLiquidity(address variantToken) public override { // raise the price of a variant token by 4% or more  
         uint256 tokenId = variantPositions[variantToken];
         (,, address token0, address token1,, int24 tickLower,,,,, uint128 tokensOwed0, uint128 tokensOwed1) = positionManager.positions(tokenId);
         address pairedToken = token0 == variantToken ? token1 : token0;
+
+
         uint256 result = calculateExcessLiquidity(variantToken, pairedToken);
         
         if (result < 420) { return; }
         
-        positionManager.collect(INonfungiblePositionManager.CollectParams({
+        positionManager.collect(INonfungiblePositionManager.CollectParams({ // i learned we can do this differently, we only nered to call collect once... 
             tokenId: tokenId,
             recipient: devAddress,
             amount0Max: tokensOwed0,
@@ -66,7 +109,7 @@ contract WuhanLab is ILab, TokensRecoverable {
         addLiquidity(variantToken, pairedToken, tickLower + 400);
     }
 
-    function calculateExcessLiquidity(address variantToken, address pairedToken) private returns (uint256) {
+    /*function calculateExcessLiquidity(address variantToken, address pairedToken) private returns (uint256) {
         IERC20 variant = IERC20(variantToken);
         IERC20 paired = IERC20(pairedToken);
         address pool = uniswapV3Factory.getPool(variantToken, pairedToken, fee);
@@ -78,7 +121,7 @@ contract WuhanLab is ILab, TokensRecoverable {
         // circulatingSupply = total supply - UpOnly in pool - collected fees
         // availableLiquidity = tokens in pool
         // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
-    }
+    }*/
 
     function eatExoticAnimal() public override {
         address spreader = msg.sender;

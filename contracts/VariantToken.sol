@@ -18,6 +18,13 @@ contract VariantToken is ERC20 {
     uint256 public immutable strainNonce;
     uint256 public immutable variantNonce;
 
+    struct virusStats { // i think we only need burn rate and pool address
+    uint256 bRate;
+    uint256 iRate;
+    uint256 startTick;
+
+    }
+
     constructor(uint256 _strainNonce, uint256 _variantNonce) ERC20("Variant", "COVID") {
         strainNonce = _strainNonce;
         variantNonce = _variantNonce;
