@@ -17,10 +17,29 @@ import "./ILab.sol";
 contract WuhanLab is ILab, TokensRecoverable {
     using SafeMath for uint256;
 
-    mapping (address => uint256) variantPositions;
-    mapping (address => bool) activeVariants;
-    mapping (address => address[]) pairedVariants;
-    mapping (uint256 => uint256) strainVariantsCount;
+    mapping (address => bool) activeVariants;    
+    mapping (uint256 => StrainData) public strains;
+    mapping (address => VariantData) public variants;
+
+    struct StrainData {
+        address pairedToken;
+        address[] allVariants;
+        uint256 variantCount;
+    }
+
+    struct VariantData {       
+        uint256 positionId; // updated every liquidity increment
+        int24 currentTickLower; // updated every liquidity increment
+        address pairedToken; // constructor / inherited from parent virus
+        address poolAddress; // constructor
+        bool isToken0; // constructor / token 1 and 0 sorted by numeric order ... 0x0, 0x1,0x2, ect ect
+        //uint160 startSqrtPriceX96; // we dont really need this, its always best to calculate from the closest tick
+        int24 startTickLower; // this can be a randomization factor, just ensure the result is divisible by 200
+        uint256 incrementRate; // new strains are all set at 400 - random(4) at variant creation -400, -200, -0, +200, result must be below burn, or -200.... 400 is the minimum
+        uint256 burnRate; // all tokens set to 690 at start, random(369), 1 = -246, 369 = +123 ... minimum burn amount possible is 420
+        uint256 stainNonce;
+        uint256 varientNonce;
+    }  
     
     INonfungiblePositionManager public immutable positionManager;
     IUniswapV3Factory public immutable uniswapV3Factory;
@@ -41,25 +60,6 @@ contract WuhanLab is ILab, TokensRecoverable {
         devAddress = msg.sender;
     }
 
-    /*mapping (uint256 => strainData) public fullDataSet;
-    mapping (address => variantData) public fullVariantDetails;
-
-    struct strainData {
-        address pairedToken;
-        address[] allVariants;
-    }
-
-    struct variantData {
-        uint256 positionID; // updated every liquidity increment
-        int24 currentTickLower; // updated every liquidity increment
-        address pairedToken; // constructor / inherited from parent virus
-        address poolAddress; // constructor
-        bool isToken0; // constructor / token 1 and 0 sorted by numeric order ... 0x0, 0x1,0x2, ect ect
-        //uint160 startSqrtPriceX96; // we dont really need this, its always best to calculate from the closest tick
-        int24 startTickLower; // this can be a randomization factor, just ensure the result is divisible by 200
-        uint256 incrementRate; // new strains are all set at 400 - random(4) at variant creation -400, -200, -0, +200, result must be below burn, or -200.... 400 is the minimum
-        uint256 burnRate; // all tokens set to 690 at start, random(369), 1 = -246, 369 = +123 ... minimum burn amount possible is 420
-    }
 
         // was to be called during increment
     function updateLiquidityParams(address variant) private returns (int24 newTick, int24 tickUpper, uint160 newPrice){ // most token data and variables tracked here, 
@@ -70,43 +70,39 @@ contract WuhanLab is ILab, TokensRecoverable {
 
     function incrementReady(address variantToken) private view returns(bool){ }
 
-    function calculateExcessLiquidity(address variantToken, address pairedToken) private returns (uint256) { // still studying this, lots to fix
-        address pool = uniswapV3Factory.getPool(variantToken, pairedToken, fee);
-        uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(pool));
-        uint256 quote = quoter.quoteExactInput(abi.encodePacked(variantToken, pairedToken, fee), circulatingSupply);
-        uint256 pairedInPool = paired.balanceOf(pool);
+    function calculateExcessLiquidity(address variantToken) private returns (uint256) { // still studying this, lots to fix
+        VarientData varientData = varients[variantToken];
+        IERC20 variant = IERC20(variantToken);       
+        uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(varientData.poolAddress));
+
+
+        uint256 quote = quoter.quoteExactInputSingle(variantToken, pairedToken, fee, circulatingSupply, TickMath.getSqrtRatioAtTick(varientData.currentTickLower));
+        uint256 pairedInPool = paired.balanceOf(varientData.poolAddress);
         uint256 excessLiquidity = pairedInPool.sub(quote);
         return excessLiquidity.mul(10000).div(pairedInPool).div(10000);
         // circulatingSupply = total supply - UpOnly in pool - collected fees
         // availableLiquidity = tokens in pool
         // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
-    } */
+    }
 
     function incrementLiquidity(address variantToken) public override { // raise the price of a variant token by 4% or more  
         uint256 tokenId = variantPositions[variantToken];
         (,, address token0, address token1,, int24 tickLower,,,,, uint128 tokensOwed0, uint128 tokensOwed1) = positionManager.positions(tokenId);
-        address pairedToken = token0 == variantToken ? token1 : token0;
-
+        address pairedToken = token0 == variantToken ? token1 : token0;//cleanup
 
         uint256 result = calculateExcessLiquidity(variantToken, pairedToken);
         
-        if (result < 420) { return; }
-        
-        positionManager.collect(INonfungiblePositionManager.CollectParams({ // i learned we can do this differently, we only nered to call collect once... 
-            tokenId: tokenId,
-            recipient: devAddress,
-            amount0Max: tokensOwed0,
-            amount1Max: tokensOwed1 }));
-
-        removeLiquidity(tokenId);
+        if (result < 420) { return; }     //increment rate + 20
 
         positionManager.collect(INonfungiblePositionManager.CollectParams({
             tokenId: tokenId,
-            recipient: address(this),
+            recipient: devAddress,
             amount0Max: type(uint128).max,
             amount1Max: type(uint128).max }));
 
-        addLiquidity(variantToken, pairedToken, tickLower + 400);
+        removeLiquidity(tokenId);
+
+        addLiquidity(variantToken, pairedToken, tickLower + 400);//increment rate
     }
 
     /*function calculateExcessLiquidity(address variantToken, address pairedToken) private returns (uint256) {
@@ -126,10 +122,10 @@ contract WuhanLab is ILab, TokensRecoverable {
     function eatExoticAnimal() public override {
         address spreader = msg.sender;
         require (activeVariants[spreader], "The animal isn't a spreader");
-        uint256 position = variantPositions[spreader];
-        (,,,address pairedToken,, int24 tick,,,,,,) = positionManager.positions(position); // push this data to new pool params, will be read within the constructor in the variant launch
-        uint256 strainNonce = VariantToken(spreader).strainNonce();
-        createNewVariant(pairedToken, tick, strainNonce, ++strainVariantsCount[strainNonce]);
+        VariantData parentVariantData = variants[spreader];
+        uint256 strainNonce = parentVariantData.strainNonce;
+        StrainData strainData = strains[strainNonce];
+        createNewVariant(pairedToken, tick, strainNonce, ++strainData.variantCount);
     }
 
     function labLeak(address newPairedToken, int24 startingTick) public {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
@@ -139,20 +135,34 @@ contract WuhanLab is ILab, TokensRecoverable {
         strainCount++;
         createNewVariant(newPairedToken, startingTick, strainCount, ++strainVariantsCount[strainCount]);
         // maybe we let the user do a buy here to encourage more people to do it
-    }
-    
+    }    
+
     function createNewVariant(address pairedToken, int24 tick, uint256 strainNonce, uint256 variantNonce) private {       
-        VariantToken newVariant = new VariantToken(strainNonce, variantNonce);
+        VariantToken newVariant = new VariantToken();
         address newVariantAddress = address(newVariant);
         address poolAddress = positionManager.createAndInitializePoolIfNecessary(newVariantAddress, pairedToken, fee, TickMath.getSqrtRatioAtTick(tick));
         newVariant.setPoolAddress(poolAddress);       
-        addLiquidity(newVariantAddress, pairedToken, tick);      
+        uint256 positionId = addLiquidity(newVariantAddress, pairedToken, tick);      
         activeVariants[address(newVariant)] = true;
-        pairedVariants[pairedToken].push(newVariantAddress);
+
+        varients[newVariantAddress] = VariantData({
+            positionId: tokenId,
+            currentTickLower: tick,
+            pairedToken: pairedToken,
+            poolAddress: poolAddress,
+            isToken0: //,
+            startTickLower: tick,
+            incrementRate: 400, //TODO: generate
+            burnRate: 690, //TODO: genetate
+            stainNonce: strainNonce,
+            variantNonce: variantNonce
+
+        });
+
         emit VariantCreated(newVariantAddress, pairedToken);
     }
 
-    function addLiquidity(address variantToken, address pairedToken, int24 tick) private {
+    function addLiquidity(address variantToken, address pairedToken, int24 tick) private returns(uint256 tokenId) {
         (uint256 tokenId,,,) = positionManager.mint(INonfungiblePositionManager.MintParams({
             token0: variantToken,
             token1: pairedToken,
@@ -166,7 +176,6 @@ contract WuhanLab is ILab, TokensRecoverable {
             recipient: address(this),
             deadline: block.timestamp
         }));
-        variantPositions[variantToken] = tokenId;
     }
 
     function removeLiquidity(uint256 tokenId) private {      
