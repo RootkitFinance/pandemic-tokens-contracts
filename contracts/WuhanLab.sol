@@ -60,68 +60,44 @@ contract WuhanLab is ILab, TokensRecoverable {
         devAddress = msg.sender;
     }
 
+    //     // was to be called during increment
+    // function updateLiquidityParams(address variant) private returns (int24 newTick, int24 tickUpper, uint160 newPrice){ // most token data and variables tracked here, 
+    //     int24 nextTick = variantData.currentTickLower + variantData.incrementRate;
+    //     variantData.currentTickLower + variantData.incrementRate;
+    //     variantData.CurrentSqrtPriceX96 = TickMath.getSqrtRatioAtTick(nextTick);
+    // }
 
-        // was to be called during increment
-    function updateLiquidityParams(address variant) private returns (int24 newTick, int24 tickUpper, uint160 newPrice){ // most token data and variables tracked here, 
-        int24 nextTick = variantData.currentTickLower + variantData.incrementRate;
-        variantData.currentTickLower + variantData.incrementRate;
-        variantData.CurrentSqrtPriceX96 = TickMath.getSqrtRatioAtTick(nextTick);
-    }
-
-    function incrementReady(address variantToken) private view returns(bool){ }
+    // function incrementReady(address variantToken) private view returns(bool){ }
 
     function calculateExcessLiquidity(address variantToken) private returns (uint256) { // still studying this, lots to fix
         VarientData varientData = varients[variantToken];
         IERC20 variant = IERC20(variantToken);       
         uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(varientData.poolAddress));
-
-
         uint256 quote = quoter.quoteExactInputSingle(variantToken, pairedToken, fee, circulatingSupply, TickMath.getSqrtRatioAtTick(varientData.currentTickLower));
         uint256 pairedInPool = paired.balanceOf(varientData.poolAddress);
         uint256 excessLiquidity = pairedInPool.sub(quote);
-        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);
-        // circulatingSupply = total supply - UpOnly in pool - collected fees
-        // availableLiquidity = tokens in pool
-        // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
+        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);   
     }
 
     function incrementLiquidity(address variantToken) public override { // raise the price of a variant token by 4% or more  
-        uint256 tokenId = variantPositions[variantToken];
-        (,, address token0, address token1,, int24 tickLower,,,,, uint128 tokensOwed0, uint128 tokensOwed1) = positionManager.positions(tokenId);
-        address pairedToken = token0 == variantToken ? token1 : token0;//cleanup
-
-        uint256 result = calculateExcessLiquidity(variantToken, pairedToken);
+        VariantData variantData = variants[variantToken];
         
-        if (result < 420) { return; }     //increment rate + 20
+        if (calculateExcessLiquidity(variantToken, variantData.pairedToken) < 420) { return; } //increment rate + 20
 
         positionManager.collect(INonfungiblePositionManager.CollectParams({
-            tokenId: tokenId,
+            tokenId: variantData.positionId,
             recipient: devAddress,
             amount0Max: type(uint128).max,
             amount1Max: type(uint128).max }));
 
-        removeLiquidity(tokenId);
-
-        addLiquidity(variantToken, pairedToken, tickLower + 400);//increment rate
+        removeLiquidity(variantData.positionId);
+        addLiquidity(variantToken, variantData.pairedToken, variantData.currentTickLower + variantData.incrementRate);
     }
-
-    /*function calculateExcessLiquidity(address variantToken, address pairedToken) private returns (uint256) {
-        IERC20 variant = IERC20(variantToken);
-        IERC20 paired = IERC20(pairedToken);
-        address pool = uniswapV3Factory.getPool(variantToken, pairedToken, fee);
-        uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(pool));
-        uint256 quote = quoter.quoteExactInput(abi.encodePacked(variantToken, pairedToken, fee), circulatingSupply);
-        uint256 pairedInPool = paired.balanceOf(pool);
-        uint256 excessLiquidity = pairedInPool.sub(quote);
-        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);
-        // circulatingSupply = total supply - UpOnly in pool - collected fees
-        // availableLiquidity = tokens in pool
-        // After selling circulatingSupply into availableLiquidity - what is percent of availableLiquidity is left over       
-    }*/
 
     function eatExoticAnimal() public override {
         address spreader = msg.sender;
-        require (activeVariants[spreader], "The animal isn't a spreader");
+        require (activeVariants[spreader], "Unknown variant");
+
         VariantData parentVariantData = variants[spreader];
         uint256 strainNonce = parentVariantData.strainNonce;
         StrainData strainData = strains[strainNonce];
@@ -150,7 +126,7 @@ contract WuhanLab is ILab, TokensRecoverable {
             currentTickLower: tick,
             pairedToken: pairedToken,
             poolAddress: poolAddress,
-            isToken0: //,
+            isToken0: IUniswapV3PoolImmutables(poolAddress).token0() == newVariantAddress,
             startTickLower: tick,
             incrementRate: 400, //TODO: generate
             burnRate: 690, //TODO: genetate
