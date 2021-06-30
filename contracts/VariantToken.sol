@@ -11,26 +11,10 @@ contract VariantToken is ERC20 {
 
     ILab public wuhanLab;
     address public poolAddress;
+    uint256 public burnRate;
 
-    uint256 public immutable burnRate;
-    uint256 public immutable incrementRate;
-    uint256 public immutable startPrice;
-    uint256 public immutable strainNonce;
-    uint256 public immutable variantNonce;
-
-    struct virusStats { // i think we only need burn rate and pool address
-    uint256 bRate;
-    uint256 iRate;
-    uint256 startTick;
-
-    }
-
-    constructor(uint256 _strainNonce, uint256 _variantNonce) ERC20("Variant", "COVID") {
-        strainNonce = _strainNonce;
-        variantNonce = _variantNonce;
-        incrementRate = 200;
-        startPrice = 1 ether;
-        burnRate = 690;
+    constructor(uint256 _burnRate) ERC20("Variant", "COVID") {
+        burnRate = _burnRate;
         wuhanLab = ILab(msg.sender);
         _mint(msg.sender, 70e12 ether);
     }
