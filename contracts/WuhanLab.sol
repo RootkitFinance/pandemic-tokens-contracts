@@ -6,6 +6,7 @@ import "./Uniswap/INonfungiblePositionManager.sol";
 import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IUniswapV3PoolImmutables.sol";
 import "./Uniswap/IUniswapV3Factory.sol";
+import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IQuoter.sol";
 import "./Uniswap/TickMath.sol";
 
@@ -34,7 +35,6 @@ contract WuhanLab is ILab, TokensRecoverable {
         address pairedToken; // constructor / inherited from parent virus
         address poolAddress; // constructor
         bool isToken0; // constructor / token 1 and 0 sorted by numeric order ... 0x0, 0x1,0x2, ect ect
-        //uint160 startSqrtPriceX96; // we dont really need this, its always best to calculate from the closest tick
         int24 startTickLower; // this can be a randomization factor, just ensure the result is divisible by 200
         uint256 incrementRate; // new strains are all set at 400 - random(4) at variant creation -400, -200, -0, +200, result must be below burn, or -200.... 400 is the minimum
         uint256 burnRate; // all tokens set to 690 at start, random(369), 1 = -246, 369 = +123 ... minimum burn amount possible is 420
@@ -49,11 +49,11 @@ contract WuhanLab is ILab, TokensRecoverable {
     address private immutable devAddress;
     uint256 public strainCount;
 
-    uint24 public constant fee = 200;
+    uint24 public constant fee = 10000;
 
     event VariantCreated(address variant, address pairedToken);
 
-    constructor(INonfungiblePositionManager _positionManager, IUniswapV3Factory _uniswapV3Factory, IQuoter _quoter, IERC20 _rootkit) {
+     constructor(INonfungiblePositionManager _positionManager, IUniswapV3Factory _uniswapV3Factory, IQuoter _quoter, IERC20 _rootkit) {
         positionManager = _positionManager;
         uniswapV3Factory = _uniswapV3Factory;
         quoter = _quoter;
@@ -125,12 +125,15 @@ contract WuhanLab is ILab, TokensRecoverable {
         }
 
          if (burnRate < incrementRate) {
-            incrementRate-=200;
+            incrementRate -= 200;
         }
 
         VariantToken newVariant = new VariantToken(burnRate);
         address newVariantAddress = address(newVariant);
-        address poolAddress = positionManager.createAndInitializePoolIfNecessary(newVariantAddress, pairedToken, fee, TickMath.getSqrtRatioAtTick(tick));
+
+        address poolAddress = uniswapV3Factory.createPool(newVariantAddress, pairedToken, fee);
+        IUniswapV3PoolActions(poolAddress).initialize(TickMath.getSqrtRatioAtTick(tick));
+       
         newVariant.setPoolAddress(poolAddress);       
         uint256 positionId = addLiquidity(newVariantAddress, pairedToken, tick);
         
@@ -141,7 +144,7 @@ contract WuhanLab is ILab, TokensRecoverable {
             currentTickLower: tick,
             pairedToken: pairedToken,
             poolAddress: poolAddress,
-            isToken0: IUniswapV3PoolImmutables(poolAddress).token0() == newVariantAddress,
+            isToken0:  newVariantAddress < pairedToken,
             startTickLower: tick,
             incrementRate: incrementRate,
             burnRate: burnRate,
@@ -154,9 +157,10 @@ contract WuhanLab is ILab, TokensRecoverable {
     }
 
     function addLiquidity(address variantToken, address pairedToken, int24 tick) private returns(uint256) {
+        (address token0, address token1) = variantToken < pairedToken ? (variantToken, pairedToken) : (pairedToken, variantToken);
         (uint256 tokenId,,,) = positionManager.mint(INonfungiblePositionManager.MintParams({
-            token0: variantToken,
-            token1: pairedToken,
+            token0: token0,
+            token1: token1,
             fee: fee,
             tickLower: tick,
             tickUpper: tick + int24(fee),
