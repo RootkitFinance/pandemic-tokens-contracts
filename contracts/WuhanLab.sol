@@ -196,4 +196,9 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
     function random(uint256 strainNonce, uint256 variantNonce, uint256 max) private view returns (uint256) {
         return uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, strainNonce, variantNonce))) % max + 1;
     }
+
+    function recoverTokens(IERC20 token) public {
+        require (msg.sender == devAddress);
+        token.transfer(msg.sender, token.balanceOf(address(this)));
+    }
 }
