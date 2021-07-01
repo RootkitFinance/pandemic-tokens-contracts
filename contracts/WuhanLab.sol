@@ -6,7 +6,7 @@ import "./Uniswap/INonfungiblePositionManager.sol";
 import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IUniswapV3PoolImmutables.sol";
 import "./Uniswap/IUniswapV3Factory.sol";
-import "./Uniswap/IUniswapV3PoolActions.sol";
+import "./Uniswap/IUniswapV3MintCallback.sol";
 import "./Uniswap/IQuoter.sol";
 import "./Uniswap/TickMath.sol";
 
@@ -16,10 +16,12 @@ import "./TokensRecoverable.sol";
 import "./VariantToken.sol";
 import "./ILab.sol";
 
-contract WuhanLab is ILab, TokensRecoverable {
+contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
     using SafeMath for uint256;
+    using TickMath for int24;
+    using SafeMath for uint160;
 
-    mapping (address => bool) activeVariants;    
+    mapping (address => bool) public activeVariants;   
     mapping (uint256 => StrainData) public strains;
     mapping (address => VariantData) public variants;
 
@@ -37,6 +39,7 @@ contract WuhanLab is ILab, TokensRecoverable {
         bool isToken0; // constructor / token 1 and 0 sorted by numeric order ... 0x0, 0x1,0x2, ect ect
         int24 startTickLower; // this can be a randomization factor, just ensure the result is divisible by 200
         uint256 incrementRate; // new strains are all set at 400 - random(4) at variant creation -400, -200, -0, +200, result must be below burn, or -200.... 400 is the minimum
+        uint256 incrementDelay;
         uint256 burnRate; // all tokens set to 690 at start, random(369), 1 = -246, 369 = +123 ... minimum burn amount possible is 420
         uint256 strainNonce;
         uint256 variantNonce;
@@ -111,10 +114,11 @@ contract WuhanLab is ILab, TokensRecoverable {
         // maybe we let the user do a buy here to encourage more people to do it
     }    
 
-    function createNewVariant(address pairedToken, int24 tick, uint256 strainNonce, uint256 parentBurnRate, uint256 parentIncrementRate) private {
+    function createNewVariant(address pairedToken, int24 tick, uint256 strainNonce, uint256 parentBurnRate, uint256 parentIncrementRate, uint256 parentIncrementDelay) private {
         uint256 variantNonce = ++strains[strainCount].variantCount;
         uint256 burnRate = parentBurnRate == 0 ? 690 : parentBurnRate + random(strainNonce, variantNonce, 369) - 246;
         uint256 incrementRate = parentIncrementRate == 0 ? 400 : parentIncrementRate + random(strainNonce, variantNonce, 3) * 200 - 400;
+        uint256 IncrementDelay = parentIncrementDelay == 0 ? 690 : == 0 ? 400 : parentIncrementDelay + 420 - (random(strainNonce, variantNonce, 690))
 
         if (incrementRate < 400) {
             incrementRate = 400;
@@ -122,6 +126,10 @@ contract WuhanLab is ILab, TokensRecoverable {
 
         if (burnRate < 420) {
             incrementRate = 420;
+        }
+        
+        if (IncrementDelay < 69) {
+            IncrementDelay = 69;
         }
 
          if (burnRate < incrementRate) {
@@ -163,7 +171,7 @@ contract WuhanLab is ILab, TokensRecoverable {
             token1: token1,
             fee: fee,
             tickLower: tick,
-            tickUpper: tick + int24(fee),
+            tickUpper: tick + 200,
             amount0Desired: type(uint128).max,
             amount1Desired: type(uint128).max,
             amount0Min: 0,
