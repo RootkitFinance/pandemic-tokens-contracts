@@ -6,22 +6,19 @@ import "./Uniswap/INonfungiblePositionManager.sol";
 import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IUniswapV3PoolImmutables.sol";
 import "./Uniswap/IUniswapV3Factory.sol";
-import "./Uniswap/IUniswapV3MintCallback.sol";
+import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IQuoter.sol";
 import "./Uniswap/TickMath.sol";
 
 import "./IERC20.sol";
 import "./SafeMath.sol";
-import "./TokensRecoverable.sol";
 import "./VariantToken.sol";
 import "./ILab.sol";
 
-contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
+contract WuhanLab is ILab {
     using SafeMath for uint256;
-    using TickMath for int24;
-    using SafeMath for uint160;
 
-    mapping (address => bool) public activeVariants;   
+    mapping (address => bool) activeVariants;    
     mapping (uint256 => StrainData) public strains;
     mapping (address => VariantData) public variants;
 
@@ -39,7 +36,6 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
         bool isToken0; // constructor / token 1 and 0 sorted by numeric order ... 0x0, 0x1,0x2, ect ect
         int24 startTickLower; // this can be a randomization factor, just ensure the result is divisible by 200
         uint256 incrementRate; // new strains are all set at 400 - random(4) at variant creation -400, -200, -0, +200, result must be below burn, or -200.... 400 is the minimum
-        uint256 incrementDelay;
         uint256 burnRate; // all tokens set to 690 at start, random(369), 1 = -246, 369 = +123 ... minimum burn amount possible is 420
         uint256 strainNonce;
         uint256 variantNonce;
@@ -53,6 +49,7 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
     uint256 public strainCount;
 
     uint24 public constant fee = 10000;
+    int24 public constant tickSpacing = 200;
 
     event VariantCreated(address variant, address pairedToken);
 
@@ -88,7 +85,7 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
 
         removeLiquidity(variantData.positionId);
         
-        addLiquidity(variantToken, variantData.pairedToken, variantData.currentTickLower + int24(variantData.incrementRate));
+        addLiquidity(variantToken, variantData.pairedToken, variantData.currentTickLower + int24(variantData.incrementRate), variantData.isToken0);
     }
 
     function eatExoticAnimal() public override {
@@ -96,7 +93,7 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
         require (activeVariants[spreader], "Unknown variant");
 
         VariantData memory parentVariantData = variants[spreader];
-        createNewVariant(parentVariantData.pairedToken, parentVariantData.currentTickLower, parentVariantData.strainNonce, parentVariantData.burnRate, parentVariantData.incrementRate);
+        createNewVariant(parentVariantData.pairedToken, parentVariantData.currentTickLower + tickSpacing, parentVariantData.strainNonce, parentVariantData.burnRate, parentVariantData.incrementRate);
     }
 
     function labLeak(address pairedToken, int24 startingTick) public {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
@@ -110,15 +107,14 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
             variantCount: 0,
             variants: strainVariants
         });
-        createNewVariant(pairedToken, startingTick, strainCount, 0, 0);
+        createNewVariant(pairedToken, startingTick, strainCount, 0, 0);        
         // maybe we let the user do a buy here to encourage more people to do it
     }    
 
-    function createNewVariant(address pairedToken, int24 tick, uint256 strainNonce, uint256 parentBurnRate, uint256 parentIncrementRate, uint256 parentIncrementDelay) private {
+    function createNewVariant(address pairedToken, int24 tick, uint256 strainNonce, uint256 parentBurnRate, uint256 parentIncrementRate) private {
         uint256 variantNonce = ++strains[strainCount].variantCount;
         uint256 burnRate = parentBurnRate == 0 ? 690 : parentBurnRate + random(strainNonce, variantNonce, 369) - 246;
         uint256 incrementRate = parentIncrementRate == 0 ? 400 : parentIncrementRate + random(strainNonce, variantNonce, 3) * 200 - 400;
-        uint256 IncrementDelay = parentIncrementDelay == 0 ? 690 : == 0 ? 400 : parentIncrementDelay + 420 - (random(strainNonce, variantNonce, 690))
 
         if (incrementRate < 400) {
             incrementRate = 400;
@@ -126,10 +122,6 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
 
         if (burnRate < 420) {
             incrementRate = 420;
-        }
-        
-        if (IncrementDelay < 69) {
-            IncrementDelay = 69;
         }
 
          if (burnRate < incrementRate) {
@@ -139,11 +131,12 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
         VariantToken newVariant = new VariantToken(burnRate);
         address newVariantAddress = address(newVariant);
 
-        address poolAddress = uniswapV3Factory.createPool(newVariantAddress, pairedToken, fee);
-        IUniswapV3PoolActions(poolAddress).initialize(TickMath.getSqrtRatioAtTick(tick));
-       
-        newVariant.setPoolAddress(poolAddress);       
-        uint256 positionId = addLiquidity(newVariantAddress, pairedToken, tick);
+        address poolAddress = uniswapV3Factory.createPool(newVariantAddress, pairedToken, fee);        
+        IUniswapV3PoolActions(poolAddress).initialize(TickMath.getSqrtRatioAtTick(tick+tickSpacing));
+        bool isToken0 = newVariantAddress < pairedToken;
+        newVariant.approve(address(positionManager), uint256(-1));
+
+        uint256 positionId = addLiquidity(newVariantAddress, pairedToken, tick, isToken0);
         
         activeVariants[address(newVariant)] = true;
        
@@ -152,7 +145,7 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
             currentTickLower: tick,
             pairedToken: pairedToken,
             poolAddress: poolAddress,
-            isToken0:  newVariantAddress < pairedToken,
+            isToken0: isToken0,
             startTickLower: tick,
             incrementRate: incrementRate,
             burnRate: burnRate,
@@ -164,16 +157,20 @@ contract WuhanLab is ILab, TokensRecoverable, IUniswapV3MintCallback {
         emit VariantCreated(newVariantAddress, pairedToken);
     }
 
-    function addLiquidity(address variantToken, address pairedToken, int24 tick) private returns(uint256) {
-        (address token0, address token1) = variantToken < pairedToken ? (variantToken, pairedToken) : (pairedToken, variantToken);
+    function addLiquidity(address variantToken, address pairedToken, int24 tick, bool isToken0) private returns(uint256) {
+ 
+        (address token0, address token1) = isToken0 ? (variantToken, pairedToken) : (pairedToken, variantToken);
+        uint256 variantBalance = IERC20(variantToken).balanceOf(address(this));
+        uint256 pairedBalance = IERC20(pairedToken).balanceOf(address(this));
+        (uint256 amount0Desired, uint256 amount1Desired) = isToken0 ? (variantBalance, pairedBalance) : (pairedBalance, variantBalance);
         (uint256 tokenId,,,) = positionManager.mint(INonfungiblePositionManager.MintParams({
             token0: token0,
             token1: token1,
             fee: fee,
             tickLower: tick,
-            tickUpper: tick + 200,
-            amount0Desired: type(uint128).max,
-            amount1Desired: type(uint128).max,
+            tickUpper: tick + tickSpacing,
+            amount0Desired: amount0Desired,
+            amount1Desired: amount1Desired,
             amount0Min: 0,
             amount1Min: 0,
             recipient: address(this),
