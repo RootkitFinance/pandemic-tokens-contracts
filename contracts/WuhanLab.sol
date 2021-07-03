@@ -130,10 +130,11 @@ contract WuhanLab is ILab {
 
         VariantToken newVariant = new VariantToken(burnRate);
         address newVariantAddress = address(newVariant);
-
-        address poolAddress = uniswapV3Factory.createPool(newVariantAddress, pairedToken, fee);        
-        IUniswapV3PoolActions(poolAddress).initialize(TickMath.getSqrtRatioAtTick(tick+tickSpacing));
+        
         bool isToken0 = newVariantAddress < pairedToken;
+        address poolAddress = uniswapV3Factory.createPool(newVariantAddress, pairedToken, fee);
+        IUniswapV3PoolActions(poolAddress).initialize(TickMath.getSqrtRatioAtTick(isToken0 ? tick : tick + tickSpacing));
+       
         newVariant.approve(address(positionManager), uint256(-1));
 
         uint256 positionId = addLiquidity(newVariantAddress, pairedToken, tick, isToken0);
