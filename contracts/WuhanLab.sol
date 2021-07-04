@@ -46,7 +46,6 @@ contract WuhanLab is ILab {
     
     INonfungiblePositionManager public immutable positionManager;
     IUniswapV3Factory public immutable uniswapV3Factory;
-    IQuoter public immutable quoter; // remove quoter    
     IERC20 public immutable rootkit;
     address private immutable devAddress;
     uint256 public strainCount;
@@ -56,10 +55,9 @@ contract WuhanLab is ILab {
 
     event VariantCreated(address variant, address pairedToken);
 
-     constructor(INonfungiblePositionManager _positionManager, IUniswapV3Factory _uniswapV3Factory, IQuoter _quoter, IERC20 _rootkit) {
+     constructor(INonfungiblePositionManager _positionManager, IUniswapV3Factory _uniswapV3Factory, IERC20 _rootkit) {
         positionManager = _positionManager;
         uniswapV3Factory = _uniswapV3Factory;
-        quoter = _quoter;
         rootkit = _rootkit;
         devAddress = msg.sender;
     }
@@ -134,8 +132,14 @@ contract WuhanLab is ILab {
 
     function labLeak(address pairedToken, int24 startingTick) public {// no amount of saftey checks can prevent rugs and broken tokens being added, so no checks are done...
         if (msg.sender != devAddress){
-            rootkit.transferFrom(msg.sender, address(this), 1 ether); // it costs 1 ROOT to start a virus with a new variant pair
+            rootkit.transferFrom(msg.sender, address(this), 11e16); // it costs 0.11 ROOT to start a virus with a new variant pair
         }
+
+        IERC20 paired = IERC20(pairedToken);
+        if (paired.allowance(address(this), address(positionManager)) < 1 ) {
+            paired.approve(address(positionManager), uint256(-1));
+            }
+
         strainCount++;
         address[] memory strainVariants;
         strains[strainCount] = StrainData({            
@@ -234,5 +238,9 @@ contract WuhanLab is ILab {
     function recoverTokens(IERC20 token) public {
         require (msg.sender == devAddress);
         token.transfer(msg.sender, token.balanceOf(address(this)));
+    }
+
+    function resetMaxApproval(IERC20 token) public{
+        token.approve(address(positionManager), uint256(-1));
     }
 }
