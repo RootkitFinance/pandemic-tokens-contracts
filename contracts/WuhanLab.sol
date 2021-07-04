@@ -7,6 +7,7 @@ import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IUniswapV3PoolImmutables.sol";
 import "./Uniswap/IUniswapV3Factory.sol";
 import "./Uniswap/IUniswapV3PoolActions.sol";
+import "./Uniswap/IUniswapV3PoolState.sol";
 import "./Uniswap/IQuoter.sol";
 import "./Uniswap/TickMath.sol";
 
@@ -88,9 +89,8 @@ contract WuhanLab is ILab {
         IERC20 variant = IERC20(variantToken);
         IERC20 paired = IERC20(variantData.pairedToken);
         uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(variantData.poolAddress));
-        uint160 tickBoundaryPrice = TickMath.getSqrtRatioAtTick(variantData.currentTickLower + 200);
-        uint160 sqrtPriceX96; // remove line and use the one below, 
-        //(uint160 sqrtPriceX96, , , , , , ) = pool.slot0();
+        uint160 tickBoundaryPrice = TickMath.getSqrtRatioAtTick(variantData.currentTickLower + 200);        
+        (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3PoolState(variantData.poolAddress).slot0();
         uint128 pairedAsLiquidity = getLiquidityForAmountInRange (tickBoundaryPrice, sqrtPriceX96, circulatingSupply);
         uint256 needed = getAmountForLiquidityInRange(tickBoundaryPrice, sqrtPriceX96, pairedAsLiquidity);
         uint256 pairedInPool = paired.balanceOf(variantData.poolAddress);
