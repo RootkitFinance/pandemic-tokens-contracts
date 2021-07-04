@@ -14,6 +14,8 @@ import "./IERC20.sol";
 import "./SafeMath.sol";
 import "./VariantToken.sol";
 import "./ILab.sol";
+import "./FullMath.sol";
+import "./FixedPoint96.sol";
 
 contract WuhanLab is ILab {
     using SafeMath for uint256;
@@ -61,7 +63,41 @@ contract WuhanLab is ILab {
         devAddress = msg.sender;
     }
 
-    function calculateExcessLiquidity(address variantToken) private returns (uint256) { // still studying this, lots to fix
+    function toUint128(uint256 x) private pure returns (uint128 y) {
+        require((y = uint128(x)) == x);
+    }
+    
+    function getLiquidityForAmountInRange(uint160 sqrtRatioUpper, uint160 sqrtRatioCurrent, uint256 amount
+    ) internal pure returns (uint128 liquidity) {
+        uint256 intermediate = FullMath.mulDiv(sqrtRatioUpper, sqrtRatioCurrent, FixedPoint96.Q96);
+        return toUint128(FullMath.mulDiv(amount, intermediate, sqrtRatioCurrent - sqrtRatioUpper));
+    }
+
+    function getAmountForLiquidityInRange(uint160 sqrtRatioUpper, uint160 sqrtRatioCurrent, uint128 liquidity
+    ) internal pure returns (uint256 amount) {
+        return
+            FullMath.mulDiv(
+                uint256(liquidity) << FixedPoint96.RESOLUTION,
+                sqrtRatioCurrent - sqrtRatioUpper,
+                sqrtRatioCurrent
+            ) / sqrtRatioUpper;
+    }
+
+    function calculateExcessLiquidity(address variantToken) private view returns (uint256) {
+        VariantData memory variantData = variants[variantToken];
+        IERC20 variant = IERC20(variantToken);
+        IERC20 paired = IERC20(variantData.pairedToken);
+        uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(variantData.poolAddress));
+        uint160 tickBoundaryPrice = TickMath.getSqrtRatioAtTick(variantData.currentTickLower + 200);
+        uint160 sqrtPriceX96; // remove line and use the one below, 
+        //(uint160 sqrtPriceX96, , , , , , ) = pool.slot0();
+        uint128 pairedAsLiquidity = getLiquidityForAmountInRange (tickBoundaryPrice, sqrtPriceX96, circulatingSupply);
+        uint256 needed = getAmountForLiquidityInRange(tickBoundaryPrice, sqrtPriceX96, pairedAsLiquidity);
+        uint256 pairedInPool = paired.balanceOf(variantData.poolAddress);
+        return ((needed - pairedInPool) * 100 / pairedInPool); //math maybe wrong... 
+    }
+
+    /*function calculateExcessLiquidity(address variantToken) private returns (uint256) { // still studying this, lots to fix
         VariantData memory variantData = variants[variantToken];
         IERC20 variant = IERC20(variantToken);
         IERC20 paired = IERC20(variantData.pairedToken);    
@@ -69,8 +105,8 @@ contract WuhanLab is ILab {
         uint256 quote = quoter.quoteExactInputSingle(variantToken, variantData.pairedToken, fee, circulatingSupply, TickMath.getSqrtRatioAtTick(variantData.currentTickLower));
         uint256 pairedInPool = paired.balanceOf(variantData.poolAddress);
         uint256 excessLiquidity = pairedInPool.sub(quote);
-        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);   
-    }
+        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);
+    }*/
 
     function incrementLiquidity(address variantToken) public override { // raise the price of a variant token by 4% or more  
         VariantData memory variantData = variants[variantToken];
