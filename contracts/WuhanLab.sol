@@ -8,7 +8,6 @@ import "./Uniswap/IUniswapV3PoolImmutables.sol";
 import "./Uniswap/IUniswapV3Factory.sol";
 import "./Uniswap/IUniswapV3PoolActions.sol";
 import "./Uniswap/IUniswapV3PoolState.sol";
-import "./Uniswap/IQuoter.sol";
 import "./Uniswap/TickMath.sol";
 
 import "./IERC20.sol";
@@ -24,6 +23,7 @@ contract WuhanLab is ILab {
     mapping (address => bool) activeVariants;    
     mapping (uint256 => StrainData) public strains;
     mapping (address => VariantData) public variants;
+    mapping (uint256 => address[]) public strainVariants;
 
     struct StrainData {
         address pairedToken;
@@ -87,7 +87,7 @@ contract WuhanLab is ILab {
         IERC20 variant = IERC20(variantToken);
         IERC20 paired = IERC20(variantData.pairedToken);
         uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(variantData.poolAddress));
-        uint160 tickBoundaryPrice = TickMath.getSqrtRatioAtTick(variantData.currentTickLower + 200);        
+        uint160 tickBoundaryPrice = TickMath.getSqrtRatioAtTick(variantData.currentTickLower + 200);
         (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3PoolState(variantData.poolAddress).slot0();
         uint128 pairedAsLiquidity = getLiquidityForAmountInRange (tickBoundaryPrice, sqrtPriceX96, circulatingSupply);
         uint256 needed = getAmountForLiquidityInRange(tickBoundaryPrice, sqrtPriceX96, pairedAsLiquidity);
@@ -117,7 +117,7 @@ contract WuhanLab is ILab {
             amount0Max: type(uint128).max,
             amount1Max: type(uint128).max }));
 
-        removeLiquidity(variantData.positionId);
+        removeLiquidity(variantData.positionId, variantData.poolAddress);
         
         addLiquidity(variantToken, variantData.pairedToken, variantData.currentTickLower + int24(variantData.incrementRate), variantData.isToken0);
     }
@@ -136,9 +136,10 @@ contract WuhanLab is ILab {
         }
 
         IERC20 paired = IERC20(pairedToken);
-        if (paired.allowance(address(this), address(positionManager)) < 1 ) {
+
+        if (paired.allowance(address(this), address(positionManager)) < 1) {
             paired.approve(address(positionManager), uint256(-1));
-            }
+        }
 
         strainCount++;
         address[] memory strainVariants;
@@ -194,6 +195,7 @@ contract WuhanLab is ILab {
             variantNonce: variantNonce
         });
         
+        strainVariants[strainCount].push(newVariantAddress);
         strains[strainCount].variants.push(newVariantAddress);
         emit VariantCreated(newVariantAddress, pairedToken);
     }
@@ -221,10 +223,10 @@ contract WuhanLab is ILab {
         return tokenId;
     }
 
-    function removeLiquidity(uint256 tokenId) private {      
+    function removeLiquidity(uint256 tokenId, address poolAddress) private {      
         positionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
             tokenId: tokenId,
-            liquidity: type(uint128).max,
+            liquidity: IUniswapV3PoolState(poolAddress).liquidity(),
             amount0Min: 0,
             amount1Min: 0,
             deadline: block.timestamp
