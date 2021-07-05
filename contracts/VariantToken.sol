@@ -6,7 +6,7 @@ import "./ERC20.sol";
 import "./IERC20.sol";
 import "./ILab.sol";
 
-contract VariantToken is ERC20 {   
+contract VariantToken is ERC20 {
     using SafeMath for uint256;
 
     ILab public wuhanLab;
@@ -40,11 +40,9 @@ contract VariantToken is ERC20 {
    
     function _transfer(address sender, address recipient, uint256 amount) internal virtual override {
         bool isLab = sender == address(wuhanLab) || recipient == address(wuhanLab);
-        require (isLab || sender == poolAddress || recipient == poolAddress, "Liquidity locked");
-
-        _beforeTokenTransfer(sender, recipient, amount);
+       // require (isLab || sender == poolAddress || recipient == poolAddress, "Liquidity locked");
+        
         uint256 remaining = amount;
-
         if (!isLab) {
             uint256 burn = amount * burnRate / 10000;
             amount = remaining = remaining.sub(burn, "VariantToken: burn too much");

@@ -95,21 +95,10 @@ contract WuhanLab is ILab {
         return ((needed - pairedInPool) * 100 / pairedInPool); //math maybe wrong... 
     }
 
-    /*function calculateExcessLiquidity(address variantToken) private returns (uint256) { // still studying this, lots to fix
-        VariantData memory variantData = variants[variantToken];
-        IERC20 variant = IERC20(variantToken);
-        IERC20 paired = IERC20(variantData.pairedToken);    
-        uint256 circulatingSupply = variant.totalSupply().sub(variant.balanceOf(variantData.poolAddress));
-        uint256 quote = quoter.quoteExactInputSingle(variantToken, variantData.pairedToken, fee, circulatingSupply, TickMath.getSqrtRatioAtTick(variantData.currentTickLower));
-        uint256 pairedInPool = paired.balanceOf(variantData.poolAddress);
-        uint256 excessLiquidity = pairedInPool.sub(quote);
-        return excessLiquidity.mul(10000).div(pairedInPool).div(10000);
-    }*/
-
     function incrementLiquidity(address variantToken) public override { // raise the price of a variant token by 4% or more  
-        VariantData memory variantData = variants[variantToken];
+        VariantData storage variantData = variants[variantToken];
         
-        if (calculateExcessLiquidity(variantToken) < variantData.incrementRate + 20) { return; }
+        if (calculateExcessLiquidity(variantToken) < variantData.incrementRate + 20) { return; }    
 
         positionManager.collect(INonfungiblePositionManager.CollectParams({
             tokenId: variantData.positionId,
@@ -118,8 +107,15 @@ contract WuhanLab is ILab {
             amount1Max: type(uint128).max }));
 
         removeLiquidity(variantData.positionId, variantData.poolAddress);
-        
-        addLiquidity(variantToken, variantData.pairedToken, variantData.currentTickLower + int24(variantData.incrementRate), variantData.isToken0);
+        positionManager.collect(INonfungiblePositionManager.CollectParams({
+            tokenId: variantData.positionId,
+            recipient: address(this),
+            amount0Max: type(uint128).max,
+            amount1Max: type(uint128).max }));
+
+        variantData.currentTickLower = variantData.currentTickLower + int24(variantData.incrementRate);
+     
+        addLiquidity(variantToken, variantData.pairedToken, variantData.currentTickLower, variantData.isToken0);
     }
 
     function eatExoticAnimal() public override {
